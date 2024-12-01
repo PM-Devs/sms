@@ -1,0 +1,11 @@
+motor
+bson
+pydantic
+typing
+datetime
+asyncio
+python-dotenv
+logging
+bcrypt
+uvicorn
+fastapi
