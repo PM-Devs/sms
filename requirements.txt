@@ -1,5 +1,5 @@
 motor
-bson
+pymongo
 pydantic
 typing
 datetime
