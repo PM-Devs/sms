@@ -12,3 +12,4 @@ fastapi
 typing-extensions 
 pydantic[email]
 email-validator
+python-multipart
