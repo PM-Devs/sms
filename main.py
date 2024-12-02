@@ -1,16 +1,19 @@
-#main
-from fastapi import FastAPI, HTTPException, Depends, Query, Path,status
+from fastapi import FastAPI, HTTPException, Depends, Query, Path, status
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from typing import List, Optional, Dict, Any
 from pydantic import BaseModel
-from bson import ObjectId
 from datetime import datetime
+from enum import Enum
+
+# Ensure PyJWT is imported
+import jwt
+
+# Import models and services
 from models import (
     User, Profile, Transaction, Transactions, InventoryItem, Book, 
     Message, Bus, BusRoute, Course, Timetable, SystemLog, Settings, 
     Logout, ProfileSettings, UserRole, PyObjectId
 )
-# Import all services from services.py
 import services
 
 # Create FastAPI app
@@ -32,7 +35,7 @@ async def get_dashboard_metrics():
         raise HTTPException(status_code=500, detail=str(e))
 
 # 2. Student Management Endpoints
-@app.get("/students", response_model=List[dict])
+@app.get("/students", response_model=List[Dict[str, Any]])
 async def list_students(
     skip: int = Query(0, ge=0), 
     limit: int = Query(100, ge=1, le=1000),
@@ -106,7 +109,7 @@ async def list_current_payroll(
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/payroll/process")
-async def process_payroll(period: datetime = Query(default_factory=datetime.utcnow)):
+async def process_payroll(period: datetime = datetime.utcnow()):
     """
     Process payroll for a specific period
     """
@@ -307,26 +310,7 @@ async def update_user_profile(
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
-# 15. Authentication Endpoint
-@app.post("/token")
-async def login(form_data: OAuth2PasswordRequestForm = Depends()):
-    """
-    User authentication endpoint
-    """
-    try:
-        user = await services.authenticate_user(form_data.username, form_data.password)
-        if not user:
-            raise HTTPException(
-                status_code=400, 
-                detail="Incorrect username or password",
-                headers={"WWW-Authenticate": "Bearer"}
-            )
-        # In a real-world scenario, you would generate a JWT token here
-        return {"access_token": str(user.id), "token_type": "bearer"}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-    
-
+# Internal function to get current user
 async def get_current_user(token: str = Depends(oauth2_scheme)):
     """
     Get current authenticated user from token
@@ -354,7 +338,7 @@ async def get_current_user(token: str = Depends(oauth2_scheme)):
 # User Registration Endpoint for Different Roles
 @app.post("/register/{role}")
 async def register_user(
-    role: UserRole, 
+    role: str, 
     user_data: dict
 ):
     """
@@ -362,9 +346,9 @@ async def register_user(
     """
     try:
         # Ensure role matches the path parameter
-        user_data['role'] = role.value
+        user_data['role'] = role
         user_id = await services.create_user(user_data)
-        return {"user_id": user_id, "message": f"{role.value.capitalize()} registered successfully"}
+        return {"user_id": user_id, "message": f"{role.capitalize()} registered successfully"}
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
@@ -392,9 +376,9 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends()):
         raise HTTPException(status_code=500, detail=str(e))
 
 # List Users by Role
-@app.get("/users/{role}", response_model=List[dict])
+@app.get("/users/{role}")
 async def list_users_by_role(
-    role: UserRole,
+    role: str,
     skip: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, le=1000),
     current_user: User = Depends(get_current_user)
@@ -404,7 +388,7 @@ async def list_users_by_role(
     """
     try:
         # Optional: Add role-based access control
-        if current_user.role not in [UserRole.ADMIN, UserRole.SUPPORT_STAFF]:
+        if current_user.role not in ["ADMIN", "SUPPORT_STAFF"]:
             raise HTTPException(status_code=403, detail="Not authorized")
         
         users = await services.list_users_by_role(role, skip, limit)
@@ -413,7 +397,7 @@ async def list_users_by_role(
         raise HTTPException(status_code=500, detail=str(e))
 
 # Get Current User Profile
-@app.get("/me", response_model=dict)
+@app.get("/me")
 async def get_current_user_profile(current_user: User = Depends(get_current_user)):
     """
     Get current authenticated user's profile
