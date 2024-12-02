@@ -1,10 +1,15 @@
-from fastapi import FastAPI, HTTPException, Depends, Query, Path
+#main
+from fastapi import FastAPI, HTTPException, Depends, Query, Path,status
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from typing import List, Optional, Dict, Any
 from pydantic import BaseModel
 from bson import ObjectId
 from datetime import datetime
-
+from models import (
+    User, Profile, Transaction, Transactions, InventoryItem, Book, 
+    Message, Bus, BusRoute, Course, Timetable, SystemLog, Settings, 
+    Logout, ProfileSettings, UserRole, PyObjectId
+)
 # Import all services from services.py
 import services
 
@@ -320,3 +325,97 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends()):
         return {"access_token": str(user.id), "token_type": "bearer"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+    
+
+async def get_current_user(token: str = Depends(oauth2_scheme)):
+    """
+    Get current authenticated user from token
+    """
+    credentials_exception = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Could not validate credentials",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+    try:
+        payload = await services.verify_access_token(token)
+        if payload is None:
+            raise credentials_exception
+        user_id: str = payload.get("sub")
+        user_role: str = payload.get("role")
+        if user_id is None:
+            raise credentials_exception
+        user = await services.get_user_by_id(user_id)
+        if user is None:
+            raise credentials_exception
+        return user
+    except Exception:
+        raise credentials_exception
+
+# User Registration Endpoint for Different Roles
+@app.post("/register/{role}")
+async def register_user(
+    role: UserRole, 
+    user_data: dict
+):
+    """
+    Register a new user with specific role
+    """
+    try:
+        # Ensure role matches the path parameter
+        user_data['role'] = role.value
+        user_id = await services.create_user(user_data)
+        return {"user_id": user_id, "message": f"{role.value.capitalize()} registered successfully"}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+# Enhanced Login Endpoint with Token Generation
+@app.post("/token")
+async def login(form_data: OAuth2PasswordRequestForm = Depends()):
+    """
+    User authentication endpoint with JWT token generation
+    """
+    try:
+        auth_result = await services.authenticate_user(form_data.username, form_data.password)
+        if not auth_result:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Incorrect username or password",
+                headers={"WWW-Authenticate": "Bearer"}
+            )
+        
+        return {
+            "access_token": auth_result['access_token'], 
+            "token_type": "bearer",
+            "user_role": auth_result['user'].role
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+# List Users by Role
+@app.get("/users/{role}", response_model=List[dict])
+async def list_users_by_role(
+    role: UserRole,
+    skip: int = Query(0, ge=0),
+    limit: int = Query(100, ge=1, le=1000),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    List users by role with authentication
+    """
+    try:
+        # Optional: Add role-based access control
+        if current_user.role not in [UserRole.ADMIN, UserRole.SUPPORT_STAFF]:
+            raise HTTPException(status_code=403, detail="Not authorized")
+        
+        users = await services.list_users_by_role(role, skip, limit)
+        return [user.dict() for user in users]
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+# Get Current User Profile
+@app.get("/me", response_model=dict)
+async def get_current_user_profile(current_user: User = Depends(get_current_user)):
+    """
+    Get current authenticated user's profile
+    """
+    return current_user.dict()

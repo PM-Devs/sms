@@ -13,3 +13,5 @@ typing-extensions
 pydantic[email]
 email-validator
 python-multipart
+python-jose[cryptography]
+passlib[bcrypt]

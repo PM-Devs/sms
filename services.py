@@ -14,7 +14,15 @@ from models import (
     Message, Bus, BusRoute, Course, Timetable, SystemLog, Settings, 
     Logout, ProfileSettings, UserRole, PyObjectId
 )
+# Add these imports at the top of services.py
+from typing import Optional
+import jwt
+from datetime import datetime, timedelta
 
+# Secret key for JWT token generation (in a real-world scenario, use a secure environment variable)
+SECRET_KEY = os.environ.get("SECRET_KEY")
+ALGORITHM = "HS256"
+ACCESS_TOKEN_EXPIRE_MINUTES = 30
 # Set up logging
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
@@ -422,16 +430,106 @@ async def update_user_profile(user_id: str, profile_data: Dict[str, Any]):
         logger.error(f"Error updating user profile: {e}")
         raise
 
- #User Authentication Service
+
+async def create_user(user_data: Dict[str, Any]):
+    """
+    Create a new user with role-based registration
+    """
+    try:
+        # Validate role
+        role = user_data.get('role', UserRole.STUDENT)
+        if role not in [r.value for r in UserRole]:
+            raise ValueError("Invalid user role")
+        
+        # Hash password
+        if 'password' in user_data:
+            user_data['password'] = bcrypt.hashpw(user_data['password'].encode(), bcrypt.gensalt())
+        
+        # Set default is_active to True
+        user_data['is_active'] = user_data.get('is_active', True)
+        
+        # Insert user
+        result = await db.users.insert_one(user_data)
+        return str(result.inserted_id)
+    except Exception as e:
+        logger.error(f"Error creating user: {e}")
+        raise
+
+async def generate_access_token(user_id: str, role: str):
+    """
+    Generate JWT access token
+    """
+    try:
+        # Token expiration
+        expire = datetime.utcnow() + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+        
+        # Payload with user details
+        to_encode = {
+            "sub": str(user_id),
+            "role": role,
+            "exp": expire
+        }
+        
+        # Encode token
+        encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+        return encoded_jwt
+    except Exception as e:
+        logger.error(f"Error generating token: {e}")
+        raise
+
+async def verify_access_token(token: str) -> Optional[Dict[str, Any]]:
+    """
+    Verify JWT access token
+    """
+    try:
+        # Decode token
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        return payload
+    except jwt.ExpiredSignatureError:
+        logger.error("Token has expired")
+        return None
+    except jwt.InvalidTokenError:
+        logger.error("Invalid token")
+        return None
+
+async def get_user_by_id(user_id: str):
+    """
+    Retrieve user by ID
+    """
+    try:
+        user = await db.users.find_one({"_id": ObjectId(user_id)})
+        return User(**user) if user else None
+    except Exception as e:
+        logger.error(f"Error retrieving user: {e}")
+        raise
+
+async def list_users_by_role(role: UserRole, skip: int = 0, limit: int = 100):
+    """
+    List users by specific role
+    """
+    try:
+        users = await db.users.find({"role": role.value}).skip(skip).limit(limit).to_list(limit)
+        return [User(**user) for user in users]
+    except Exception as e:
+        logger.error(f"Error listing users by role: {e}")
+        raise
+
+# Update the existing authenticate_user function
 async def authenticate_user(username: str, password: str):
     """
-    Authenticate user credentials
+    Enhanced user authentication with token generation
     """
     try:
         user = await db.users.find_one({"username": username})
         if user and bcrypt.checkpw(password.encode(), user['password']):
-            return User(**user)
+            # Generate access token
+            user_obj = User(**user)
+            token = await generate_access_token(str(user_obj.id), user_obj.role)
+            return {
+                "user": user_obj,
+                "access_token": token
+            }
         return None
     except Exception as e:
-        logger.error(f"Error logging in user profile: {e}")
+        logger.error(f"Error logging in user: {e}")
         raise
