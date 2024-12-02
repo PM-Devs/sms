@@ -220,7 +220,7 @@ class ProfileSettings(BaseModelWithId):
     two_factor_authentication: bool = False
     theme: str = "default"
     
-    class BaseModelWithId(BaseModel):
+class BaseModelWithId(BaseModel):
     id: Optional[PyObjectId] = Field(default=None, alias="_id")
 
     class Config:
