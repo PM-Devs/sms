@@ -9,3 +9,6 @@ logging
 bcrypt
 uvicorn
 fastapi
+typing-extensions 
+pydantic[email]
+email-validator
