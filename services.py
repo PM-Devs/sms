@@ -8,7 +8,7 @@ from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional
 import logging
 import bcrypt
-
+import re
 from models import (
     User, Profile, Transaction, Transactions, InventoryItem, Book, 
     Message, Bus, BusRoute, Course, Timetable, SystemLog, Settings, 
@@ -486,7 +486,7 @@ async def create_user(user_data: Dict[str, Any]):
         logger.error(f"Error creating user: {e}")
         raise
 
-    
+
 async def generate_access_token(user_id: str, role: str):
     """
     Generate JWT access token
