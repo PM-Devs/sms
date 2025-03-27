@@ -1,9 +1,9 @@
-#models.py
 from typing import List, Optional, Dict, Any
 from pydantic import BaseModel, Field, EmailStr, HttpUrl, constr, conint, confloat
 from datetime import date, datetime, time
 from enum import Enum
 from bson import ObjectId
+from pydantic_core import core_schema
 
 
 class PyObjectId(ObjectId):
@@ -12,23 +12,31 @@ class PyObjectId(ObjectId):
         yield cls.validate
 
     @classmethod
-    def validate(cls, v):
+    def validate(cls, v: Any, handler=None) -> ObjectId:
+        if isinstance(v, ObjectId):
+            return v
         if not ObjectId.is_valid(v):
             raise ValueError("Invalid ObjectId")
         return ObjectId(v)
 
     @classmethod
-    def __get_pydantic_json_schema__(cls, core_schema, handler):
-        return {"type": "string"}
-    
+    def __get_pydantic_core_schema__(cls, source_type, handler) -> core_schema.CoreSchema:
+        return core_schema.no_info_after_validator_function(
+            cls.validate,
+            core_schema.str_schema(),
+            serialization=core_schema.to_string_ser_schema(),
+        )
+
+
 class BaseModelWithId(BaseModel):
     id: Optional[PyObjectId] = Field(default=None, alias="_id")
 
     class Config:
-        populate_by_name = True  # Changed from allow_population_by_field_name
+        populate_by_name = True
         arbitrary_types_allowed = True
         json_encoders = {ObjectId: str}
-# Updated User Role to match Document's Descriptions
+
+
 class UserRole(str, Enum):
     ADMIN = "admin"
     TEACHER = "teacher"
@@ -36,12 +44,11 @@ class UserRole(str, Enum):
     SUPPORT_STAFF = "support"
     TEMPORARY_STAFF = "temporary"
 
-# Enhanced User Model with More Comprehensive Details
+
 class User(BaseModelWithId):
-    """Comprehensive user model with detailed information"""
     username: constr(min_length=3, max_length=50)
     email: EmailStr
-    password: str  # Hashed password
+    password: str
     first_name: str
     last_name: str
     role: UserRole
@@ -50,9 +57,8 @@ class User(BaseModelWithId):
     department: Optional[str] = None
     contact_info: Optional[Dict[str, str]] = None
 
-# Enhanced Profile Model with Emergency Contacts
+
 class Profile(BaseModelWithId):
-    """Comprehensive user profile with emergency contact details"""
     user_id: PyObjectId
     phone_number: Optional[str] = None
     address: Optional[str] = None
@@ -63,9 +69,8 @@ class Profile(BaseModelWithId):
         description="List of emergency contact details with name, relationship, and contact number"
     )
 
-# Updated Transactions Models
+
 class Transaction(BaseModelWithId):
-    """Enhanced financial transaction model with comprehensive details"""
     user_id: PyObjectId
     amount: confloat(ge=0)
     transaction_type: str
@@ -76,8 +81,8 @@ class Transaction(BaseModelWithId):
     status: str = "completed"
     invoice_number: Optional[str] = None
 
+
 class Transactions(BaseModelWithId):
-    """Financial overview with detailed income and expense tracking"""
     total_income: float
     total_expenses: float
     current_balance: float
@@ -85,9 +90,8 @@ class Transactions(BaseModelWithId):
     expense_channels: List[Dict[str, float]] = []
     recent_transactions: List[Transaction] = []
 
-# Updated Inventory Model
+
 class InventoryItem(BaseModelWithId):
-    """Enhanced inventory management with sales and restocking details"""
     name: str
     category: str
     quantity: conint(ge=0)
@@ -96,11 +100,10 @@ class InventoryItem(BaseModelWithId):
     reorder_point: int
     supplier: Optional[str] = None
     last_restocked: Optional[date] = None
-    sales_trend: Optional[List[float]] = None  # Historical sales data
+    sales_trend: Optional[List[float]] = None
 
-# Updated Book Model for E-Library
+
 class Book(BaseModelWithId):
-    """Comprehensive e-library book management"""
     title: str
     author: str
     isbn: str
@@ -111,23 +114,21 @@ class Book(BaseModelWithId):
     publisher: Optional[str] = None
     is_borrowed: bool = False
 
-# Enhanced Messaging Model
+
 class Message(BaseModelWithId):
-    """Advanced messaging system with communication analytics"""
     sender_id: PyObjectId
     recipients: List[PyObjectId]
     subject: str
     body: str
-    channel: str  # SMS or Email
+    channel: str
     sent_at: datetime = Field(default_factory=datetime.utcnow)
     status: str = "sent"
     template_used: Optional[str] = None
     delivery_rate: Optional[float] = None
     open_rate: Optional[float] = None
 
-# Updated Transportation Models
+
 class Bus(BaseModelWithId):
-    """Enhanced bus management with maintenance tracking"""
     name: str
     number: str
     capacity: int
@@ -138,17 +139,16 @@ class Bus(BaseModelWithId):
     next_maintenance_due: date
     maintenance_history: List[Dict[str, Any]] = []
 
+
 class BusRoute(BaseModelWithId):
-    """Detailed bus route management"""
     name: str
     stops: List[str]
     assigned_bus_id: PyObjectId
     schedule: Dict[str, List[time]]
     total_students_route: int = 0
 
-# Updated Course Model
+
 class Course(BaseModelWithId):
-    """Comprehensive academic course management"""
     name: str
     code: str
     department: str
@@ -157,11 +157,10 @@ class Course(BaseModelWithId):
     schedule: Dict[str, Any] = {}
     credits: int
     semester: str
-    grade_scale: Dict[str, Dict[str, float]] = {}  # Grade definitions
+    grade_scale: Dict[str, Dict[str, float]] = {}
 
-# Updated Timetable Model
+
 class Timetable(BaseModelWithId):
-    """Advanced timetable with additional details"""
     grade: str
     day_of_week: int
     start_time: time
@@ -170,18 +169,16 @@ class Timetable(BaseModelWithId):
     room: str
     teacher_id: Optional[PyObjectId] = None
 
-# System Logging Remains Similar
+
 class SystemLog(BaseModelWithId):
-    """System activity and error logging"""
     timestamp: datetime
     severity: str
     component: str
     message: str
     user_id: Optional[PyObjectId] = None
 
-# Enhanced Settings Model
+
 class Settings(BaseModelWithId):
-    """Comprehensive and configurable school system settings"""
     school_name: str
     academic_year_start: date
     academic_year_end: date
@@ -196,11 +193,12 @@ class Settings(BaseModelWithId):
     }
     communication_channels: List[str] = ["SMS", "Email"]
 
-# Logout and Profile Settings Remain Similar
+
 class Logout(BaseModelWithId):
     user_id: PyObjectId
     logout_time: datetime = Field(default_factory=datetime.utcnow)
     session_duration: Optional[int] = None
+
 
 class ProfileSettings(BaseModelWithId):
     user_id: PyObjectId

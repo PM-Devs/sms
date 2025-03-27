@@ -565,3 +565,5 @@ async def authenticate_user(username: str, password: str):
     except Exception as e:
         logger.error(f"Error logging in user: {e}")
         raise
+
+    
