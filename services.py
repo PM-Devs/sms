@@ -434,27 +434,59 @@ async def update_user_profile(user_id: str, profile_data: Dict[str, Any]):
 async def create_user(user_data: Dict[str, Any]):
     """
     Create a new user with role-based registration
+    Required fields: username, password, email, role
     """
     try:
+        # Validate required fields
+        required_fields = ['username', 'password', 'email', 'role']
+        for field in required_fields:
+            if field not in user_data:
+                raise ValueError(f"Missing required field: {field}")
+        
         # Validate role
-        role = user_data.get('role', UserRole.STUDENT)
-        if role not in [r.value for r in UserRole]:
-            raise ValueError("Invalid user role")
+        if user_data['role'] not in [r.value for r in UserRole]:
+            raise ValueError(f"Invalid user role. Must be one of: {[r.value for r in UserRole]}")
+        
+        # Validate email format
+        if not re.match(r"[^@]+@[^@]+\.[^@]+", user_data['email']):
+            raise ValueError("Invalid email format")
+        
+        # Check if username or email already exists
+        existing_user = await db.users.find_one({
+            '$or': [
+                {'username': user_data['username']},
+                {'email': user_data['email']}
+            ]
+        })
+        if existing_user:
+            raise ValueError("Username or email already exists")
         
         # Hash password
-        if 'password' in user_data:
-            user_data['password'] = bcrypt.hashpw(user_data['password'].encode(), bcrypt.gensalt())
+        hashed_password = bcrypt.hashpw(user_data['password'].encode(), bcrypt.gensalt())
         
-        # Set default is_active to True
-        user_data['is_active'] = user_data.get('is_active', True)
+        # Create user document
+        user_doc = {
+            'username': user_data['username'],
+            'email': user_data['email'],
+            'password': hashed_password,
+            'role': user_data['role'],
+            'is_active': True,
+            'created_at': datetime.utcnow(),
+            'updated_at': datetime.utcnow()
+        }
         
         # Insert user
-        result = await db.users.insert_one(user_data)
+        result = await db.users.insert_one(user_doc)
         return str(result.inserted_id)
+        
+    except ValueError as ve:
+        logger.error(f"Validation error creating user: {ve}")
+        raise
     except Exception as e:
         logger.error(f"Error creating user: {e}")
         raise
 
+    
 async def generate_access_token(user_id: str, role: str):
     """
     Generate JWT access token
