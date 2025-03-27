@@ -1,40 +1,47 @@
 from typing import List, Optional, Dict, Any
-from pydantic import BaseModel, Field, EmailStr, HttpUrl, constr, conint, confloat
+from pydantic import BaseModel, Field, EmailStr, HttpUrl, constr, conint, confloat, field_validator
 from datetime import date, datetime, time
 from enum import Enum
 from bson import ObjectId
 from pydantic_core import core_schema
 
 
-class PyObjectId(ObjectId):
+class PyObjectId:
     @classmethod
-    def __get_validators__(cls):
-        yield cls.validate
+    def __get_pydantic_core_schema__(cls, _source_type, _handler):
+        return core_schema.union_schema([
+            core_schema.is_instance_schema(ObjectId),
+            core_schema.no_info_plain_validator_function(cls.validate),
+        ])
 
     @classmethod
-    def validate(cls, v: Any, handler=None) -> ObjectId:
+    def validate(cls, v):
         if isinstance(v, ObjectId):
             return v
-        if not ObjectId.is_valid(v):
-            raise ValueError("Invalid ObjectId")
-        return ObjectId(v)
+        if isinstance(v, str):
+            try:
+                return ObjectId(v)
+            except:
+                raise ValueError("Invalid ObjectId")
+        raise ValueError("Invalid ObjectId")
 
     @classmethod
-    def __get_pydantic_core_schema__(cls, source_type, handler) -> core_schema.CoreSchema:
-        return core_schema.no_info_after_validator_function(
-            cls.validate,
-            core_schema.str_schema(),
-            serialization=core_schema.to_string_ser_schema(),
-        )
+    def __get_pydantic_json_schema__(cls, _core_schema, _handler):
+        return {"type": "string"}
 
 
 class BaseModelWithId(BaseModel):
     id: Optional[PyObjectId] = Field(default=None, alias="_id")
 
     class Config:
-        populate_by_name = True
         arbitrary_types_allowed = True
-        json_encoders = {ObjectId: str}
+        populate_by_name = True
+        json_encoders = {
+            ObjectId: str,
+            datetime: lambda v: v.isoformat(),
+            date: lambda v: v.isoformat(),
+            time: lambda v: v.isoformat(),
+        }
 
 
 class UserRole(str, Enum):
@@ -46,16 +53,22 @@ class UserRole(str, Enum):
 
 
 class User(BaseModelWithId):
-    username: constr(min_length=3, max_length=50)
+    username: constr(min_length=3, max_length=50) # type: ignore
     email: EmailStr
     password: str
-    first_name: str
-    last_name: str
+    first_name: str = Field(..., min_length=1)  # Required field
+    last_name: str = Field(..., min_length=1)   # Required field
     role: UserRole
     is_active: bool = True
     last_login: Optional[datetime] = None
     department: Optional[str] = None
     contact_info: Optional[Dict[str, str]] = None
+
+    @field_validator('id', mode='before')
+    def validate_id(cls, v):
+        if v is None:
+            return None
+        return PyObjectId.validate(v)
 
 
 class Profile(BaseModelWithId):
