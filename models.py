@@ -55,16 +55,54 @@ class UserRole(str, Enum):
 
 
 class User(BaseModelWithId):
-    username: str = Field(min_length=3, max_length=50)
-    email: EmailStr
-    password: str = Field(min_length=8)
-    first_name: str = Field(..., min_length=1, max_length=100)
-    last_name: str = Field(..., min_length=1, max_length=100)
-    role: UserRole
-    is_active: bool = True
-    last_login: Optional[datetime] = None
-    department: Optional[str] = Field(None, max_length=100)
-    contact_info: Optional[Dict[str, str]] = None
+    username: Optional[str] = Field(
+        None, 
+        min_length=3, 
+        max_length=50,
+        description="Unique username for the user"
+    )
+    email: Optional[EmailStr] = Field(
+        None,
+        description="User's email address"
+    )
+    password: Optional[str] = Field(
+        None,
+        min_length=8,
+        description="Hashed password (optional for some operations)"
+    )
+    first_name: Optional[str] = Field(
+        None,
+        min_length=1,
+        max_length=100,
+        description="User's first name"
+    )
+    last_name: Optional[str] = Field(
+        None,
+        min_length=1,
+        max_length=100,
+        description="User's last name"
+    )
+    role: Optional[UserRole] = Field(
+        None,
+        description="User's role in the system"
+    )
+    is_active: Optional[bool] = Field(
+        True,
+        description="Whether the user account is active"
+    )
+    last_login: Optional[datetime] = Field(
+        None,
+        description="Timestamp of last login"
+    )
+    department: Optional[str] = Field(
+        None,
+        max_length=100,
+        description="User's department or organizational unit"
+    )
+    contact_info: Optional[Dict[str, str]] = Field(
+        None,
+        description="Additional contact information"
+    )
 
     @field_validator('id', mode='before')
     def validate_id(cls, v):
