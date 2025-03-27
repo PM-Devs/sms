@@ -4,7 +4,7 @@ from typing import List, Optional, Dict, Any
 from pydantic import BaseModel
 from datetime import datetime
 from enum import Enum
-
+from fastapi.middleware.cors import CORSMiddleware
 # Ensure PyJWT is imported
 import jwt
 
@@ -19,6 +19,15 @@ import services
 # Create FastAPI app
 app = FastAPI(title="School Management System API")
 
+
+# Add this right after creating your FastAPI app
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # For development only, specify domains in production
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 # Authentication Dependency
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
 
